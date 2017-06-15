@@ -3,6 +3,8 @@
 const PRIVATE_CHANNEL_INDEX = 7,
 	PRIVATE_CHANNEL_ID = -2 >>> 0,
 	PRIVATE_CHANNEL_NAME = 'Proxy',
+	PUBLIC_ENABLE = true,
+	PUBLIC_MATCH = /^!([^!].*)$/,
 	LOGIN_MESSAGE = true
 
 class Command {
@@ -28,11 +30,11 @@ class Command {
 				})
 		})
 
-		dispatch.hook('S_JOIN_PRIVATE_CHANNEL', 1, event => event.index === PRIVATE_CHANNEL_INDEX ? false : undefined)
-		dispatch.hook('C_LEAVE_PRIVATE_CHANNEL', 1, event => event.index === PRIVATE_CHANNEL_INDEX ? false : undefined)
+		dispatch.hook('S_JOIN_PRIVATE_CHANNEL', 1, event => event.index == PRIVATE_CHANNEL_INDEX ? false : undefined)
+		dispatch.hook('C_LEAVE_PRIVATE_CHANNEL', 1, event => event.index == PRIVATE_CHANNEL_INDEX ? false : undefined)
 
 		dispatch.hook('C_REQUEST_PRIVATE_CHANNEL_INFO', 1, event => {
-			if(event.channelId === PRIVATE_CHANNEL_ID) {
+			if(event.channelId == PRIVATE_CHANNEL_ID) {
 				dispatch.toClient('S_REQUEST_PRIVATE_CHANNEL_INFO', 1, {
 					owner: 1,
 					password: 0,
@@ -43,25 +45,38 @@ class Command {
 			}
 		})
 
-		dispatch.hook('C_CHAT', 1, {order: 10}, event => {
-			if(event.channel === 11 + PRIVATE_CHANNEL_INDEX) {
-				let args = null
+		let hookCommand = message => {
+			let args = null
 
-				try {
-					args = parseArgs(stripOuterHTML(event.message))
-				}
-				catch(e) {
-					this.message('Syntax error: ' + e.message)
+			try {
+				args = parseArgs(stripOuterHTML(message))
+			}
+			catch(e) {
+				this.message('Syntax error: ' + e.message)
+				return
+			}
+
+			try {
+				if(!this.exec(args)) this.message('Unknown command "' + args[0] + '".')
+			}
+			catch(e) {
+				this.message('Error running callback for command "' + args[0] + '".')
+			}
+		}
+
+		dispatch.hook('C_CHAT', 1, {order: 10}, event => {
+			if(event.channel == 11 + PRIVATE_CHANNEL_INDEX) {
+				hookCommand(event.message)
+				return false
+			}
+
+			if(PUBLIC_ENABLE) {
+				let str = PUBLIC_MATCH.exec(stripOuterHTML(event.message))
+
+				if(str) {
+					hookCommand(str[1])
 					return false
 				}
-
-				try {
-					if(!this.exec(args)) this.message('Unknown command "' + args[0] + '".')
-				}
-				catch(e) {
-					this.message('Error running callback for command "' + args[0] + '".')
-				}
-				return false
 			}
 		})
 	}
